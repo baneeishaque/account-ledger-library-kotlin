@@ -1,6 +1,7 @@
 package account.ledger.library.utils
 
 import account.ledger.library.models.UserCredentials
+import common.utils.library.utils.ConsoleInputUtils
 
 object UserUtilsInteractive {
 
@@ -9,9 +10,9 @@ object UserUtilsInteractive {
 
         val user = UserCredentials(username = "", passcode = "")
         print("Enter Your Username : ")
-        user.username = readlnOrNull().toString()
+        user.username = ConsoleInputUtils.readlnOrNull().toString()
         print("Enter Your Password : ")
-        user.passcode = readlnOrNull().toString()
+        user.passcode = ConsoleInputUtils.readlnOrNull().toString()
         return user
     }
 }

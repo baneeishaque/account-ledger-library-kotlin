@@ -831,7 +831,7 @@ object LedgerSheetOperations {
                         do {
 
                             print("Retry (Y/N) ? : ")
-                            when (readln()) {
+                            when (ConsoleInputUtils.readln()) {
 
                                 "Y", "" -> {
 
