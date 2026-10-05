@@ -12,12 +12,12 @@ import io.github.cdimascio.dotenv.Dotenv
 object CheckingOperations {
 
     /*
-    Receives fromAccount, viaAccount, toAccount & Checks them.
+    Receives fromAccount, viaAccount, toAccount & Checks all of them.
     Returns 0 if all are available.
-        1 if fromAccount is unavailable & toAccount available.
-        2 if toAccount available.
-        3 if transactionType is Via, viaAccount unavailable & toAccount & fromAccounts are there.
-      It also executes actions on missing desired account.
+        1 if fromAccount is unavailable.
+        2 if toAccount is unavailable.
+        3 if transactionType is Via / Cyclic Via & viaAccount is unavailable.
+      It also executes actions on every missing desired account.
     */
     @JvmStatic
     fun isAccountsAreAvailable(
@@ -32,22 +32,30 @@ object CheckingOperations {
 
     ): Int {
 
-        if (toAccount.id == 0u) {
+        val isFromAccountMissing: Boolean = fromAccount.id == 0u
+        val isToAccountMissing: Boolean = toAccount.id == 0u
+        val isViaAccountMissing: Boolean =
+            ((transactionType == TransactionTypeEnum.VIA) || (transactionType == TransactionTypeEnum.CYCLIC_VIA)) && (viaAccount.id == 0u)
+
+        if (isFromAccountMissing) {
 
             fromAccountMissingActions.invoke()
-            return 1
-
-        } else if (fromAccount.id == 0u) {
+        }
+        if (isToAccountMissing) {
 
             toAccountMissingActions.invoke()
-            return 2
-
-        } else if (((transactionType == TransactionTypeEnum.VIA) || (transactionType == TransactionTypeEnum.CYCLIC_VIA)) && (viaAccount.id == 0u)) {
+        }
+        if (isViaAccountMissing) {
 
             viaAccountMissingActions.invoke()
-            return 3
         }
-        return 0
+        return when {
+
+            isFromAccountMissing -> 1
+            isToAccountMissing -> 2
+            isViaAccountMissing -> 3
+            else -> 0
+        }
     }
 
     @JvmStatic
