@@ -23,6 +23,41 @@ import kotlin.math.absoluteValue
 
 object LedgerSheetOperations {
 
+    private var lastPrintedError: String? = null
+    private var isErrorPrintDeduplicationEnabled: Boolean = false
+
+    @JvmStatic
+    fun <T> withSheetErrorPrintDeduplication(sheetOperations: () -> T): T {
+
+        if (isErrorPrintDeduplicationEnabled) {
+
+            return sheetOperations.invoke()
+        }
+        isErrorPrintDeduplicationEnabled = true
+        lastPrintedError = null
+        try {
+
+            return sheetOperations.invoke()
+
+        } finally {
+
+            isErrorPrintDeduplicationEnabled = false
+            lastPrintedError = null
+        }
+    }
+
+    private fun printSheetError(error: String) {
+
+        if (!isErrorPrintDeduplicationEnabled || (error != lastPrintedError)) {
+
+            println(error)
+        }
+        if (isErrorPrintDeduplicationEnabled) {
+
+            lastPrintedError = error
+        }
+    }
+
     @JvmStatic
     fun balanceSheetOfUser(
 
@@ -103,7 +138,7 @@ object LedgerSheetOperations {
             },
             errorOperation = fun(error: String) {
 
-                println(error)
+                printSheetError(error)
                 isOkModel.error = error
             }
         )
@@ -663,26 +698,35 @@ object LedgerSheetOperations {
         balanceSheetOkModelToSubtract: (String, UInt, Boolean, Boolean, Boolean, Dotenv) -> IsOkModel<List<BalanceSheetDataRowModel>>,
         dotEnv: Dotenv
     ) {
+        val balanceSheetResults: Pair<IsOkModel<List<BalanceSheetDataRowModel>>, IsOkModel<List<BalanceSheetDataRowModel>>> =
+            withSheetErrorPrintDeduplication {
+
+                Pair(
+
+                    balanceSheetOkModelFromSubtract.invoke(
+
+                        currentUserName,
+                        currentUserId,
+                        isNotApiCall,
+                        isConsoleMode,
+                        isDevelopmentMode,
+                        dotEnv
+                    ),
+                    balanceSheetOkModelToSubtract.invoke(
+
+                        currentUserName,
+                        currentUserId,
+                        isNotApiCall,
+                        isConsoleMode,
+                        isDevelopmentMode,
+                        dotEnv
+                    )
+                )
+            }
         val balanceSheetOkModelFromSubtractResult: IsOkModel<List<BalanceSheetDataRowModel>> =
-            balanceSheetOkModelFromSubtract.invoke(
-
-                currentUserName,
-                currentUserId,
-                isNotApiCall,
-                isConsoleMode,
-                isDevelopmentMode,
-                dotEnv
-            )
+            balanceSheetResults.first
         val balanceSheetOkModelToSubtractResult: IsOkModel<List<BalanceSheetDataRowModel>> =
-            balanceSheetOkModelToSubtract.invoke(
-
-                currentUserName,
-                currentUserId,
-                isNotApiCall,
-                isConsoleMode,
-                isDevelopmentMode,
-                dotEnv
-            )
+            balanceSheetResults.second
         if (balanceSheetOkModelFromSubtractResult.isOK && balanceSheetOkModelToSubtractResult.isOK) {
 
             println(ConstantsCommon.DOUBLE_DASHED_LINE_SEPARATOR)
@@ -1120,37 +1164,35 @@ object LedgerSheetOperations {
             }
 
         val accounts: MutableMap<UInt, String> = mutableMapOf()
+        val unconfiguredAccounts: MutableMap<UInt, String> = mutableMapOf()
         selectUserTransactionsAfterSpecifiedDateResult.transactions.forEach { transaction: TransactionResponse ->
 
-            fun validateAccountDetails(accountId: UInt, accountName: String): IsOkModel<MutableMap<UInt, String>>? {
+            fun collectAccountDetails(accountId: UInt, accountName: String) {
 
-                return if (accountsToInclude.contains(accountId.toString())) {
+                if (accountsToInclude.contains(accountId.toString())) {
 
                     accounts.putIfAbsent(accountId, accountName)
-                    null
 
-                } else if (accountsToIgnore.contains(accountId.toString())) {
+                } else if (!accountsToIgnore.contains(accountId.toString())) {
 
-                    null
-
-                } else {
-
-                    IsOkModel(
-                        isOK = false,
-                        error = "Account $accountId : $accountName not available in configuration"
-                    )
+                    unconfiguredAccounts.putIfAbsent(accountId, accountName)
                 }
             }
 
-            val validateAccountResult =
-                validateAccountDetails(transaction.fromAccountId, transaction.fromAccountFullName)
-                    ?: validateAccountDetails(transaction.toAccountId, transaction.toAccountFullName)
-                    ?: IsOkModel(isOK = true)
+            collectAccountDetails(transaction.fromAccountId, transaction.fromAccountFullName)
+            collectAccountDetails(transaction.toAccountId, transaction.toAccountFullName)
+        }
+        if (unconfiguredAccounts.isNotEmpty()) {
 
-            if (IsOkUtils.isNotOk(validateAccountResult)) {
+            return IsOkModel(
 
-                return validateAccountResult
-            }
+                isOK = false,
+                error = unconfiguredAccounts.entries
+                    .sortedBy { account: Map.Entry<UInt, String> -> account.key }
+                    .joinToString(separator = "\n") { account: Map.Entry<UInt, String> ->
+                        "Account ${account.key} : ${account.value} not available in configuration"
+                    }
+            )
         }
 
         if (isDevelopmentMode) {
