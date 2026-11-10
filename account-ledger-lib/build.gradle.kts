@@ -1,7 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
-val ktorVersion: String = "3.6.0-typed-auth-dsl-eap-1641"
+val ktorVersion: String = "3.7.0-async-files-eap-1700"
 val retrofitVersion = "3.0.0"
 
 plugins {
